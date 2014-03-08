@@ -12,7 +12,7 @@
 		require_impl = Npm.require;
 	}
 
-	var request, extend, defer;
+	var request, extend, defer, promise;
 	var debug = function(x){};
 
 	function node_request(request){
@@ -25,9 +25,10 @@
 					debug('GET ' + url + ' failed with: ' + err);
 					d.reject(err);
 				} else {
-					// TODO xml2json
-					if (typeof body == 'string') {
-						body = JSON.parse(body);
+					if (options.type == 'json') {
+						if (typeof body == 'string') {
+							body = JSON.parse(body);
+						}
 					}
 					d.resolve(body);
 				}
@@ -39,31 +40,35 @@
 	switch (env){
 		case 'node':
 		case 'meteor':
-			debug = require_impl('debug')('teamcity.js');
-			defer = require_impl('q').defer;
+			debug = require_impl('debug')('kiln.js');
+			var q = require_impl('q');
+			defer = q.defer;
+			promise = q;
 			extend = require_impl('underscore').extend;
-			request = node_request(require_impl('request'), require_impl('q'));
+			request = node_request(require_impl('request'), q);
 		break;
 		default:
 			if (typeof window.debug != 'undefined') {
-				debug = window.debug('teamcity.js');
+				debug = window.debug('kiln.js');
 			}
 			defer = $.Deferred;
+			promise = function(value) {
+				return $.Deferred().resolve(value).promise();
+			};
 			extend = $.extend;
 			request = function(url, options){
 				// accept fake request for tests
 				if (options.request){
 					return node_request(options.request)(url, options);
 				}
-				var auth = options.auth;
-				// TODO pass 'accept: application/json' header
-				return $.ajax({
+				var query = {
 					type: 'GET',
-					url: url,
-					dataType: 'json',
-					username: auth.user,
-					password: auth.pass
-				});
+					url: url
+				};
+				if (options.type == 'json') {
+					query.dataType = 'json';
+				}
+				return $.ajax(query);
 			};
 		break;
 	}
@@ -80,6 +85,17 @@
 		});
 	}
 
+	// builds query string
+	function qs(params) {
+		var keys = Object.keys(params);
+		if (keys.length === 0) return '';
+		return '?' + keys.map(function(key){
+			var val = params[key];
+			return key + '=' + encodeURIComponent(String(val));
+		}).filter(function(s){ return s.length > 0; })
+		.join('&');
+	}
+
 	function kiln(options){
 		// check required options
 		if (typeof options != 'object'){
@@ -91,58 +107,59 @@
 			throw new Error("Required 'endpoint' option is not specified.");
 		}
 
-		// auto-fix endpoint
-		var app_rest = 'Api/1.0';
-		if (endpoint.indexOf(app_rest) >= 0) {
-			endpoint = endpoint.replace(app_rest, '');
-		}
-		if (endpoint.charAt(endpoint.length - 1) != '/'){
+		if (endpoint.charAt(endpoint.length - 1) != '/') {
 			endpoint += '/';
 		}
 
+		var token = options.token;
 		var user = options.user || options.username;
 		var password = options.password || options.pwd;
-		if (!user || typeof user != 'string') {
-			throw new Error("Required 'user' option is not specified.");
-		}
-		if (!password || typeof password != 'string') {
-			throw new Error("Required 'password' option is not specified.");
-		}
-
-		var req_opts = {
-			auth: {
-				user: user,
-				pass: password
-			},
-			headers: {
-				accept: 'application/json'
+		if (token) {
+			if (typeof token != 'string') {
+				throw new Error("'token' option is not string.");
 			}
-		};
+		} else {
+			if (!user || typeof user != 'string') {
+				throw new Error("Required 'user' option is not specified.");
+			}
+			if (!password || typeof password != 'string') {
+				throw new Error("Required 'password' option is not specified.");
+			}
+		}
 
-		// TODO locator - query arguments
-		function build_url(baseUrl, entity, locator){
+		// request options
+		var req_opts = {};
+
+		function build_url(baseUrl, path, params){
 			if (!baseUrl) {
-				baseUrl = endpoint + app_rest;
+				baseUrl = endpoint + api_prefix;
 			} else if (!is_absolute_uri(baseUrl)) {
 				baseUrl = endpoint + baseUrl;
 			}
 			if (baseUrl.charAt(baseUrl.length - 1) != '/'){
 				baseUrl += '/';
 			}
-			return baseUrl + entity;
+			return baseUrl + path + qs(params);
 		}
 
-		function get(baseUrl, entity, locator){
-			var url = build_url(baseUrl, entity, locator);
+		function get(baseUrl, entity, params){
+			var url = build_url(baseUrl, entity, params);
 			debug('GET ' + url);
 			return request(url, req_opts);
 		}
 
-		// TODO login then create client
+		function create_client(token){
+			return {
+				// TODO api
+			};
+		}
 
-		return {
-			// TODO api
-		};
+		if (token) {
+			var client = create_client(token);
+			return promise(client);
+		}
+
+		return get('', 'Auth/Login', {sUser: user, sPassword: password}).then(create_client);
 	}
 
 	// expose public api for different environments
