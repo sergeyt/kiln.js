@@ -1,6 +1,6 @@
 {
   "name": "kiln.js",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Kiln client runnable in nodejs and browser environments.",
   "license": "MIT",
   "main": "kiln.js",
