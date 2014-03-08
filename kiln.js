@@ -74,15 +74,18 @@
 	}
 
 	// utils
-	function is_absolute_uri(uri){
-		return (/^https?:\/\//i).test(uri);
-	}
-
 	function format(s, args){
 		return s.replace(/\{(\d+)\}/g, function(m, i){
 			var index = (+i);
 			return typeof args[index] != 'undefined' ? args[index] : '';
 		});
+	}
+
+	function combine(p1, p2) {
+		if (p1) {
+			return p1.charAt(p1.length - 1) != '/' ? p1 + '/' + p2 : p1 + p2;
+		}
+		return p2;
 	}
 
 	// builds query string
@@ -96,6 +99,64 @@
 		.join('&');
 	}
 
+	// api schema
+	var project_api = {
+		remove: 'POST:Delete'
+	};
+
+	var repo_group_api = {
+		remove: 'POST:Delete'
+	};
+
+	var repo_api = {
+		remove: 'POST:Delete',
+		outgoing: 'Outgoing',
+		history: 'History',
+		diff: 'History/{rev}',
+		manifest: 'Manifest',
+		tags: 'Tags',
+		branches: 'NamedBranches',
+		related: {
+			url: 'Related',
+			prefix: 'Repo/{ixRepo}'
+		},
+		file: 'Raw/File/{path}'
+	};
+	repo_api.related.api = repo_api;
+
+	var kiln_api = {
+		projects: {
+			url: 'Project',
+			prefix: 'Project/{ixProject}',
+			api: project_api
+		},
+		project: {
+			url: 'Project/{id}',
+			prefix: 'Project/{ixProject}',
+			api: project_api
+		},
+		repo_groups: {
+			url: 'RepoGroup',
+			prefix: 'RepoGroup/{ixRepoGroup}',
+			api: repo_group_api
+		},
+		repo_group: {
+			url: 'RepoGroup/{id}',
+			prefix: 'RepoGroup/{ixRepoGroup}',
+			api: repo_group_api
+		},
+		repos: {
+			url: 'Repo',
+			prefix: 'Repo/{ixRepo}',
+			api: repo_api
+		},
+		repo: {
+			url: 'Repo/{id}',
+			prefix: 'Repo/{ixRepo}',
+			api: repo_api
+		}
+	};
+
 	function kiln(options){
 		// check required options
 		if (typeof options != 'object'){
@@ -105,10 +166,6 @@
 		var endpoint = options.url || options.endpoint;
 		if (!endpoint || typeof endpoint != 'string'){
 			throw new Error("Required 'endpoint' option is not specified.");
-		}
-
-		if (endpoint.charAt(endpoint.length - 1) != '/') {
-			endpoint += '/';
 		}
 
 		var token = options.token;
@@ -130,33 +187,63 @@
 		// request options
 		var req_opts = {};
 
-		function build_url(baseUrl, path, params){
-			if (!baseUrl) {
-				baseUrl = endpoint + api_prefix;
-			} else if (!is_absolute_uri(baseUrl)) {
-				baseUrl = endpoint + baseUrl;
-			}
-			if (baseUrl.charAt(baseUrl.length - 1) != '/'){
-				baseUrl += '/';
-			}
-			return baseUrl + path + qs(params);
-		}
-
-		function get(baseUrl, entity, params){
-			var url = build_url(baseUrl, entity, params);
+		function get(path, params){
+			var url = combine(endpoint, path) + qs(params);
 			debug('GET ' + url);
 			return request(url, req_opts);
 		}
 
-		function create_client(token){
-			return {
-				// TODO api
+		function eval_url_template(template, query, options) {
+			var url = template.replace(/\{(\w+)\}/g, function(m, key){
+				return query.hasOwnProperty(key) ? query[key] : '';
+			});
+			return combine(options.prefix, url);
+		}
+
+		function build_method(def, options) {
+			var url_template, prefix, api;
+
+			if (typeof def == 'object') {
+				url_template = def.url;
+				prefix = def.prefix;
+				api = def.api;
+			} else if (typeof def == 'string') {
+				url_template = def;
+			}
+
+			return function(query, params){
+				var path = eval_url_template(url_template, query, options);
+				// TODO pass auth token
+				// TODO support post requests
+				return get(path, params).then(function(d) {
+					if (!api) {
+						return d;
+					}
+
+					function extend_record(record) {
+						var url_prefix = eval_url_template(prefix, record, {});
+						return inject_api(record, api, {token: options.token, prefix: url_prefix});
+					}
+
+					return Array.isArray(d) ? d.map(extend_record) : extend_record(d);
+				});
 			};
 		}
 
+		function inject_api(record, api, options) {
+			Object.keys(api).forEach(function(key){
+				var def = api[key];
+				record[key] = build_method(def, options);
+			});
+			return record;
+		}
+
+		function create_client(token){
+			return inject_api({}, kiln_api, {token: token});
+		}
+
 		if (token) {
-			var client = create_client(token);
-			return promise(client);
+			return promise(create_client(token));
 		}
 
 		return get('', 'Auth/Login', {sUser: user, sPassword: password}).then(create_client);
