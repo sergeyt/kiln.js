@@ -5,6 +5,7 @@
 
 [![NPM version](https://badge.fury.io/js/kiln.js.png)](http://badge.fury.io/js/kiln.js)
 [![Deps Status](https://david-dm.org/sergeyt/kiln.js.png)](https://david-dm.org/sergeyt/kiln.js)
+[![DevDeps Status](https://david-dm.org/sergeyt/kiln.js/dev-status.png)](https://david-dm.org/sergeyt/kiln.js#info=devDependencies)
 
 [![NPM](https://nodei.co/npm/kiln.js.png?downloads=true&stars=true)](https://nodei.co/npm/kiln.js/)
 
