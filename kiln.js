@@ -40,7 +40,7 @@
 	switch (env){
 		case 'node':
 		case 'meteor':
-			debug = require_impl('debug')('kiln.js');
+			debug = require_impl('debug')('kiln');
 			var q = require_impl('q');
 			defer = q.defer;
 			promise = q;
@@ -49,7 +49,7 @@
 		break;
 		default:
 			if (typeof window.debug != 'undefined') {
-				debug = window.debug('kiln.js');
+				debug = window.debug('kiln');
 			}
 			defer = $.Deferred;
 			promise = function(value) {
@@ -88,8 +88,15 @@
 		return p2;
 	}
 
+	function reject(reason) {
+		var d = defer();
+		d.reject(reason);
+		return typeof d.promise == 'function' ? d.promise() : d.promise;
+	}
+
 	// builds query string
 	function qs(params) {
+		if (!params) return '';
 		var keys = Object.keys(params);
 		if (keys.length === 0) return '';
 		return '?' + keys.map(function(key){
@@ -187,10 +194,19 @@
 		// request options
 		var req_opts = {};
 
-		function get(path, params){
+		function get(path, params) {
 			var url = combine(endpoint, path) + qs(params);
 			debug('GET ' + url);
-			return request(url, req_opts);
+			return request(url, req_opts).then(function(d) {
+				// TODO auto parse JSON in request function
+				if (typeof d == 'string') {
+					d = JSON.parse(d);
+				}
+				if (d.errors) {
+					return reject(d.errors[0].sError);
+				}
+				return d;
+			});
 		}
 
 		function eval_url_template(template, query, options) {
@@ -211,10 +227,10 @@
 				url_template = def;
 			}
 
-			return function(query, params){
+			return function(query, params) {
 				var path = eval_url_template(url_template, query, options);
-				// TODO pass auth token
 				// TODO support post requests
+				params = extend(params || {}, {token: options.token});
 				return get(path, params).then(function(d) {
 					if (!api) {
 						return d;
@@ -230,23 +246,23 @@
 			};
 		}
 
-		function inject_api(record, api, options) {
+		function inject_api(obj, api, options) {
 			Object.keys(api).forEach(function(key){
 				var def = api[key];
-				record[key] = build_method(def, options);
+				obj[key] = build_method(def, options);
 			});
-			return record;
+			return obj;
 		}
 
-		function create_client(token){
-			return inject_api({}, kiln_api, {token: token});
+		function create_client(token) {
+			return inject_api({token: token}, kiln_api, {token: token});
 		}
 
 		if (token) {
 			return promise(create_client(token));
 		}
 
-		return get('', 'Auth/Login', {sUser: user, sPassword: password}).then(create_client);
+		return get('Auth/Login', {sUser: user, sPassword: password}).then(create_client);
 	}
 
 	// expose public api for different environments
