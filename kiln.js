@@ -21,6 +21,7 @@
 			var req = options.request || request;
 			var d = defer();
 			req(url, options, function(err, res, body){
+				// TODO handle html error page
 				if (err) {
 					debug('GET ' + url + ' failed with: ' + err);
 					d.reject(err);
@@ -164,6 +165,12 @@
 		},
 		bug: {
 			url: 'Bug/{id}'
+		},
+		users: {
+			url: 'Person'
+		},
+		people: {
+			url: 'Person'
 		}
 	};
 
