@@ -161,6 +161,9 @@
 			url: 'Repo/{id}',
 			prefix: 'Repo/{ixRepo}',
 			api: repo_api
+		},
+		bug: {
+			url: 'Bug/{id}'
 		}
 	};
 

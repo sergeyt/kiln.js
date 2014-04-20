@@ -7,7 +7,7 @@ opts =
 kiln(opts)
 	.then (client) ->
 		console.log('token: %s', client.token)
-		client.projects()
+		client.bug({id: 171868})
 	.then (list) ->
 		console.log(list)
 	.catch (err) ->
