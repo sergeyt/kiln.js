@@ -132,6 +132,17 @@
 	};
 	repo_api.related.api = repo_api;
 
+	var users_method = {
+		url: 'Person',
+		convert: function(u) {
+			return {
+				id: u.ixPerson,
+				name: u.sName,
+				email: u.sEmail
+			};
+		}
+	};
+
 	var kiln_api = {
 		projects: {
 			url: 'Project',
@@ -166,12 +177,8 @@
 		bug: {
 			url: 'Bug/{id}'
 		},
-		users: {
-			url: 'Person'
-		},
-		people: {
-			url: 'Person'
-		}
+		users: users_method,
+		people: users_method
 	};
 
 	function kiln(options){
@@ -227,12 +234,13 @@
 		}
 
 		function build_method(def, options) {
-			var url_template, prefix, api;
+			var url_template, prefix, api, convert;
 
 			if (typeof def == 'object') {
 				url_template = def.url;
 				prefix = def.prefix;
 				api = def.api;
+				convert = def.convert;
 			} else if (typeof def == 'string') {
 				url_template = def;
 			}
@@ -242,16 +250,21 @@
 				// TODO support post requests
 				params = extend(params || {}, {token: options.token});
 				return get(path, params).then(function(d) {
-					if (!api) {
-						return d;
-					}
 
 					function extend_record(record) {
 						var url_prefix = eval_url_template(prefix, record, {});
 						return inject_api(record, api, {token: options.token, prefix: url_prefix});
 					}
 
-					return Array.isArray(d) ? d.map(extend_record) : extend_record(d);
+					if (api) {
+						return Array.isArray(d) ? d.map(extend_record) : extend_record(d);
+					}
+
+					if (typeof convert == 'function') {
+						return Array.isArray(d) ? d.map(convert) : convert(d);
+					}
+
+					return d;
 				});
 			};
 		}
