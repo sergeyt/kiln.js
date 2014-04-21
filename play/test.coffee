@@ -7,10 +7,10 @@ opts =
 kiln(opts)
 	.then (client) ->
 		console.log('token: %s', client.token)
-		# client.projects()
+		client.projects()
 		# client.bug({id: 171868})
-		client.users()
+		# client.users()
 	.then (list) ->
-		console.log(list)
+		console.log(JSON.stringify(list, null, 2))
 	.catch (err) ->
 		console.log(err)

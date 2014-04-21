@@ -126,6 +126,63 @@
 		.join('&');
 	}
 
+	// converters
+	function convert_user(it) {
+		return {
+			id: it.ixPerson,
+			name: it.sName,
+			email: it.sEmail
+		};
+	}
+
+	function convert_project(it) {
+		return {
+			id: it.ixProject,
+			name: it.sName,
+			description: it.sDescription,
+			slug: it.sSlug,
+			permissionDefault: it.permissionDefault,
+			repoGroups: (it.repoGroups || []).map(convert_repo_group)
+		};
+	}
+
+	function convert_repo_group(it) {
+		return {
+			id: it.ixRepoGroup,
+			projectId: it.ixProject,
+			name: it.sName,
+			slug: it.sSlug,
+			repos: (it.repos || []).map(convert_repo)
+		};
+	}
+
+	function convert_repo(it) {
+		var res = {
+			id: it.ixRepo,
+			name: it.sName,
+			description: it.sDescription,
+			parentId: it.ixParent,
+			groupId: it.ixRepoGroup,
+			permissionDefault: it.permissionDefault,
+			central: it.fCentral,
+			bytesSize: it.bytesSize,
+			aliases: it.rgAliases,
+			slug: it.sSlug,
+			groupSlug: it.sGroupSlug,
+			projectSlug: it.sProjectSlug,
+			status: it.sStatus,
+			branches: (it.repoBranches || []).map(convert_repo)
+		};
+		if (it.personCreator) {
+			res.creator = {
+				id: it.personCreator.ixPerson,
+				name: it.personCreator.sName,
+				email: it.personCreator.sEmail
+			};
+		}
+		return res;
+	}
+
 	// api schema
 	var project_api = {
 		remove: 'POST:Delete'
@@ -151,53 +208,54 @@
 	};
 	repo_api.related.api = repo_api;
 
-	var users_method = {
-		url: 'Person',
-		convert: function(u) {
-			return {
-				id: u.ixPerson,
-				name: u.sName,
-				email: u.sEmail
-			};
-		}
-	};
-
 	var kiln_api = {
 		projects: {
 			url: 'Project',
-			prefix: 'Project/{ixProject}',
-			api: project_api
+			prefix: 'Project/{id}',
+			api: project_api,
+			convert: convert_project
 		},
 		project: {
 			url: 'Project/{id}',
-			prefix: 'Project/{ixProject}',
-			api: project_api
+			prefix: 'Project/{id}',
+			api: project_api,
+			convert: convert_project
 		},
 		repo_groups: {
 			url: 'RepoGroup',
 			prefix: 'RepoGroup/{ixRepoGroup}',
-			api: repo_group_api
+			api: repo_group_api,
+			convert: convert_repo_group
 		},
 		repo_group: {
 			url: 'RepoGroup/{id}',
 			prefix: 'RepoGroup/{ixRepoGroup}',
-			api: repo_group_api
+			api: repo_group_api,
+			convert: convert_repo_group
 		},
 		repos: {
 			url: 'Repo',
 			prefix: 'Repo/{ixRepo}',
-			api: repo_api
+			api: repo_api,
+			convert: convert_repo
 		},
 		repo: {
 			url: 'Repo/{id}',
 			prefix: 'Repo/{ixRepo}',
-			api: repo_api
+			api: repo_api,
+			convert: convert_repo
 		},
 		bug: {
 			url: 'Bug/{id}'
 		},
-		users: users_method,
-		people: users_method
+		users: {
+			url: 'Person',
+			convert: convert_user
+		},
+		people: {
+			url: 'Person',
+			convert: convert_user
+		}
 	};
 
 	function kiln(options){
@@ -265,6 +323,9 @@
 			}
 
 			function extend_record(record) {
+				if (typeof convert == 'function') {
+					record = convert(record);
+				}
 				var url_prefix = eval_url_template(prefix, record, {});
 				return inject_api(record, api, {token: options.token, prefix: url_prefix});
 			}
