@@ -12,6 +12,13 @@
 		require_impl = Npm.require;
 	}
 
+	// trim polyfill
+	if (!String.prototype.trim) {
+		String.prototype.trim = function () {
+			return this.replace(/^\s+|\s+$/g, '');
+		};
+	}
+
 	var request, extend, defer, promise;
 	var debug = function(x){};
 
@@ -21,18 +28,29 @@
 			var req = options.request || request;
 			var d = defer();
 			req(url, options, function(err, res, body){
-				// TODO handle html error page
 				if (err) {
 					debug('GET ' + url + ' failed with: ' + err);
 					d.reject(err);
-				} else {
-					if (options.type == 'json') {
-						if (typeof body == 'string') {
-							body = JSON.parse(body);
-						}
-					}
-					d.resolve(body);
+					return;
 				}
+				// handle html error page
+				var contentType = (res.headers['content-type'] || '').toLowerCase();
+				if (contentType.indexOf('html') >= 0) {
+					var m = (/<title>([^<]*)<\/title>/).exec(body);
+					if (m) {
+						err = m[1];
+						d.reject(err.trim());
+					} else {
+						d.reject(body);
+					}
+					return;
+				}
+				if (options.type == 'json') {
+					if (typeof body == 'string') {
+						body = JSON.parse(body);
+					}
+				}
+				d.resolve(body);
 			});
 			return typeof d.promise == 'function' ? d.promise() : d.promise;
 		};
@@ -57,9 +75,9 @@
 				return $.Deferred().resolve(value).promise();
 			};
 			extend = $.extend;
-			request = function(url, options){
+			request = function(url, options) {
 				// accept fake request for tests
-				if (options.request){
+				if (options.request) {
 					return node_request(options.request)(url, options);
 				}
 				var query = {
@@ -69,6 +87,7 @@
 				if (options.type == 'json') {
 					query.dataType = 'json';
 				}
+				// TODO handle html error page
 				return $.ajax(query);
 			};
 		break;
@@ -245,25 +264,22 @@
 				url_template = def;
 			}
 
+			function extend_record(record) {
+				var url_prefix = eval_url_template(prefix, record, {});
+				return inject_api(record, api, {token: options.token, prefix: url_prefix});
+			}
+
 			return function(query, params) {
 				var path = eval_url_template(url_template, query, options);
 				// TODO support post requests
 				params = extend(params || {}, {token: options.token});
 				return get(path, params).then(function(d) {
-
-					function extend_record(record) {
-						var url_prefix = eval_url_template(prefix, record, {});
-						return inject_api(record, api, {token: options.token, prefix: url_prefix});
-					}
-
 					if (api) {
 						return Array.isArray(d) ? d.map(extend_record) : extend_record(d);
 					}
-
 					if (typeof convert == 'function') {
 						return Array.isArray(d) ? d.map(convert) : convert(d);
 					}
-
 					return d;
 				});
 			};
