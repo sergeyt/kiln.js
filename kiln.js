@@ -183,6 +183,19 @@
 		return res;
 	}
 
+	function convert_bug(it) {
+		return {
+			date: new Date(Date.parse(it.dt)),
+			bugs: it.ixBugs || [],
+			reviews: it.ixReviews || [],
+			rev: it.rev,
+			revParent1: it.revParent1,
+			revParent2: it.revParent2,
+			author: it.sAuthor,
+			description: it.sDescription
+		};
+	}
+
 	// api schema
 	var project_api = {
 		remove: 'POST:Delete'
@@ -246,7 +259,8 @@
 			convert: convert_repo
 		},
 		bug: {
-			url: 'Bug/{id}'
+			url: 'Bug/{id}',
+			convert: convert_bug
 		},
 		users: {
 			url: 'Person',
