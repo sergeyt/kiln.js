@@ -17,9 +17,9 @@
     "Sergey Todyshev <stodyshev@gmail.com>"
   ],
   "dependencies": {
-    "request": "~2.36",
+    "request": "~2.44",
     "q": "~1.0",
-    "underscore": "~1.6",
+    "underscore": "~1.7",
     "debug": "~1.0"
   },
   "devDependencies": {
